@@ -1,4 +1,4 @@
-# Rustantic - Pydantic Generated from Rust
+# Rustantic - Pydantic Generated from Rust (WIP)
 Rustantic is a Rust-based code generation tool that automatically generates Pydantic models for Python from Rust structs annotated with custom attributes. 
 It leverages [PyO3](https://pyo3.rs/) to expose Rust types and functions to Python, while using a build script to scan your source code and generate matching Pydantic models.  
 The generated Python models include a `to_rs()` method that creates a PyO3-wrapped Rust instance using custom constructors (detected via the `#[new]` attribute).
