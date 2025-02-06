@@ -1,0 +1,2 @@
+[workspace]
+members = ["rustantic", "rustantic_test", "rustantic-macros"]

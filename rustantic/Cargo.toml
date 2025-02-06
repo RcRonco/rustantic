@@ -1,0 +1,11 @@
+[package]
+name = "rustantic"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+syn = { version = "2.0.98", features = ["visit", "full", "derive", "parsing"] }
+quote = { version = "1.0.38" }
+serde = { version = "1.0.217", features = ["derive"] }
+walkdir = "2.5.0"
+convert_case = "0.7.1"
