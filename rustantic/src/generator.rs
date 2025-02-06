@@ -5,7 +5,8 @@ use std::path::PathBuf;
 
 use crate::collector::MetadataCollector;
 use crate::models::ConstructorMetadata;
-use crate::models::PydanticMetadata;
+use crate::models::StructMetadata;
+use crate::models::UnitEnumMetadata;
 use convert_case::{Case, Casing};
 use syn::GenericArgument;
 use syn::PathArguments;
@@ -77,7 +78,15 @@ impl PydanticCodeGenerator {
             .structs()
             .iter()
             .for_each(|(ident, meta)| {
-                generator.generate_pydantic_file(ident, meta);
+                generator.generate_struct_file(ident, meta);
+            });
+
+        generator
+            .collector
+            .unit_enum()
+            .iter()
+            .for_each(|(ident, meta)| {
+                generator.generate_unit_enum_file(ident, meta);
             });
     }
 
@@ -88,12 +97,26 @@ impl PydanticCodeGenerator {
         fs::write(&path, "").unwrap();
     }
 
-    fn generate_pydantic_file(&self, identifier: &str, meta: &PydanticMetadata) {
+    fn generate_unit_enum_file(&self, identifier: &str, meta: &UnitEnumMetadata) {
         println!(
-            "cargo:warning=Start Rustantic generator for item: {}",
+            "cargo:warning=Start Rustantic generator for unit enum: {}",
             identifier
         );
-        let generated_code = self.generate_pydantic_code(meta);
+
+        let generated_code = self.generate_unit_enum_code(meta);
+        let mut path = PathBuf::from(&self.base_path);
+        path.push(self.create_path(identifier));
+
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, generated_code).unwrap();
+    }
+
+    fn generate_struct_file(&self, identifier: &str, meta: &StructMetadata) {
+        println!(
+            "cargo:warning=Start Rustantic generator for struct: {}",
+            identifier
+        );
+        let generated_code = self.generate_struct_code(meta);
         let mut path = PathBuf::from(&self.base_path);
         path.push(self.create_path(identifier));
 
@@ -105,7 +128,44 @@ impl PydanticCodeGenerator {
         format!("{}.py", identifier.to_string().to_case(Case::Snake))
     }
 
-    fn generate_pydantic_code(&self, meta: &PydanticMetadata) -> String {
+    fn generate_unit_enum_code(&self, meta: &UnitEnumMetadata) -> String {
+        let import_code = format!("import enum\nimport {}\n", self.package_name);
+        let mut code = format!("class {}(enum.Enum):\n", &meta.ident);
+        for (var_name, discriminant) in meta.variants.iter() {
+            code.push_str(&format!("    {}", &var_name));
+            if let Some(disc_val) = discriminant {
+                code.push_str(&format!(" = {}\n", disc_val));
+            } else {
+                code.push_str(" = enum.auto()\n");
+            }
+        }
+        code.push_str("\n");
+        code.push_str(&self.generate_unit_enum_to_pyo3(meta));
+
+        format!("{}\n{}\n{}", self.header_comment, import_code, code)
+    }
+
+    fn generate_unit_enum_to_pyo3(&self, meta: &UnitEnumMetadata) -> String {
+        let indent = "    ";
+        let mut code = format!("{0}def to_rs(self):\n", indent);
+        code.push_str(&format!("{0}{0}match self:\n", indent));
+
+        for (ref var_name, _) in meta.variants.iter() {
+            code.push_str(&format!(
+                "{0}{0}{0}case {1}.{2}:\n{0}{0}{0}{0}return {3}.{1}.{2}\n",
+                indent, &meta.ident, var_name, self.package_name
+            ));
+        }
+
+        code.push_str(&format!(
+            "{0}{0}{0}case _:\n{0}{0}{0}{0}raise ValueError(f\"Unsupported value '{{self}}'\")\n",
+            indent
+        ));
+
+        code
+    }
+
+    fn generate_struct_code(&self, meta: &StructMetadata) -> String {
         let mut import_code = format!(
             "from pydantic import BaseModel\nimport {}\n",
             self.package_name
@@ -120,7 +180,7 @@ impl PydanticCodeGenerator {
                     code.push_str(&format!("    {}\n", field_result.code));
                 }
                 code.push_str("\n");
-                code.push_str(&self.generate_to_pyo3_fn("    ", &meta.ident, ctor));
+                code.push_str(&self.generate_struct_to_pyo3(&meta.ident, ctor));
             }
             None => {
                 code.push_str(
@@ -154,20 +214,16 @@ impl PydanticCodeGenerator {
         result
     }
 
-    fn generate_to_pyo3_fn(
-        &self,
-        indent: &str,
-        struct_name: &str,
-        constructor: &ConstructorMetadata,
-    ) -> String {
+    fn generate_struct_to_pyo3(&self, struct_name: &str, ctor: &ConstructorMetadata) -> String {
+        let indent = "    ";
         let mut code = format!("{0}def to_rs(self):\n", indent);
         code.push_str(&format!(
             "{0}{0}return {1}.{2}(\n",
             indent, self.package_name, struct_name
         ));
-        for (arg_name, arg_ty) in constructor.args.iter() {
+        for (arg_name, arg_ty) in ctor.args.iter() {
             if let Some(ident_str) = self.get_type_ident(arg_ty) {
-                if self.collector.structs().contains_key(&ident_str) {
+                if self.collector.contains_ident(&ident_str) {
                     code.push_str(&format!(
                         "{0}{0}{0}{1}=self.{1}.to_rs(),\n",
                         indent, arg_name
@@ -279,20 +335,8 @@ impl PydanticCodeGenerator {
                 // Custom or unknown type
                 _ => {
                     // Custom pydantic ref
-                    if let Some(meta) = self.collector.structs().get(&ident_str) {
-                        result.additional_imports.insert(format!(
-                            "from {0}.{1} import {2} as Pydantic{2}",
-                            &self.models_package_name,
-                            &meta.ident.to_case(Case::Snake),
-                            &meta.ident
-                        ));
-                        format!("Pydantic{}", ident_str.as_str())
-                    }
-                    // Unknown type
-                    else {
-                        result.add_any_import();
-                        format!("Any # Unknown type {}", ident_str.as_str())
-                    }
+                    self.custom_type_to_pydantic(&ident_str, &mut result);
+                    result.code
                 }
             };
         } else {
@@ -302,5 +346,22 @@ impl PydanticCodeGenerator {
         }
 
         result
+    }
+
+    fn custom_type_to_pydantic(&self, ident: &str, field_result: &mut FieldGenerationResult) {
+        field_result.code = if self.collector.contains_ident(ident) {
+            field_result.additional_imports.insert(format!(
+                "from {0}.{1} import {2}",
+                &self.models_package_name,
+                &ident.to_case(Case::Snake),
+                &ident
+            ));
+            format!("{}", &ident)
+        }
+        // Unknown type
+        else {
+            field_result.add_any_import();
+            format!("Any # Unknown type {}", &ident)
+        }
     }
 }

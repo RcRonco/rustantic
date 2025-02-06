@@ -1,14 +1,15 @@
-use crate::models::{ConstructorMetadata, PydanticMetadata};
+use crate::models::{ConstructorMetadata, StructMetadata, UnitEnumMetadata};
 use std::{collections::HashMap, fs, path::PathBuf};
 use syn::{
-    parse_file, visit::Visit, Attribute, FnArg, ImplItem, ImplItemFn, Item, ItemImpl, ItemStruct,
-    Type,
+    parse_file, visit::Visit, Attribute, FnArg, ImplItem, ImplItemFn, Item, ItemEnum, ItemImpl,
+    ItemStruct, Type,
 };
 use walkdir::WalkDir;
 
-pub struct MetadataCollector {
+pub(crate) struct MetadataCollector {
     lib_location: PathBuf,
-    structs: HashMap<String, PydanticMetadata>,
+    structs: HashMap<String, StructMetadata>,
+    unit_enums: HashMap<String, UnitEnumMetadata>,
 }
 
 impl MetadataCollector {
@@ -16,6 +17,7 @@ impl MetadataCollector {
         Self {
             lib_location: PathBuf::from(lib_location),
             structs: HashMap::new(),
+            unit_enums: HashMap::new(),
         }
     }
 
@@ -23,8 +25,16 @@ impl MetadataCollector {
         self.scan_lib();
     }
 
-    pub fn structs(&self) -> &HashMap<String, PydanticMetadata> {
+    pub fn structs(&self) -> &HashMap<String, StructMetadata> {
         &self.structs
+    }
+
+    pub fn unit_enum(&self) -> &HashMap<String, UnitEnumMetadata> {
+        &self.unit_enums
+    }
+
+    pub fn contains_ident(&self, ident: &str) -> bool {
+        self.structs.contains_key(ident) || self.unit_enums.contains_key(ident)
     }
 
     fn scan_lib(&mut self) {
@@ -67,9 +77,8 @@ impl MetadataCollector {
     fn collect_pydantic_struct(&mut self, item_struct: &ItemStruct) {
         self.structs.insert(
             item_struct.ident.to_string(),
-            PydanticMetadata {
+            StructMetadata {
                 ident: item_struct.ident.to_string(),
-                fields: item_struct.fields.clone(),
                 constructor: None,
             },
         );
@@ -98,15 +107,43 @@ impl MetadataCollector {
             struct_meta.set_ctor(ConstructorMetadata { args });
         }
     }
+
+    fn collect_pydantic_enum(&mut self, item_enum: &ItemEnum) {
+        let mut variants = Vec::new();
+        for variant in item_enum.variants.iter() {
+            if let Some((_, ref expr)) = variant.discriminant {
+                variants.push((
+                    variant.ident.to_string(),
+                    Some(quote::quote!(#expr).to_string()),
+                ));
+            } else {
+                variants.push((variant.ident.to_string(), None));
+            }
+        }
+        self.unit_enums.insert(
+            item_enum.ident.to_string(),
+            UnitEnumMetadata {
+                ident: item_enum.ident.to_string(),
+                variants,
+            },
+        );
+    }
 }
 
 impl<'ast> Visit<'ast> for MetadataCollector {
     fn visit_item(&mut self, node: &'ast Item) {
-        if let Item::Struct(ref item_struct) = node {
-            // Look for the attribute #[my_pydantic]
-            if self.has_rustantic_attr(&item_struct.attrs) {
-                self.collect_pydantic_struct(item_struct);
+        match node {
+            Item::Struct(ref item_struct) => {
+                if self.has_rustantic_attr(&item_struct.attrs) {
+                    self.collect_pydantic_struct(item_struct);
+                }
             }
+            Item::Enum(ref item_enum) => {
+                if self.has_rustantic_attr(&item_enum.attrs) {
+                    self.collect_pydantic_enum(item_enum);
+                }
+            }
+            _ => {}
         }
         // Continue visiting nested items.
         syn::visit::visit_item(self, node);

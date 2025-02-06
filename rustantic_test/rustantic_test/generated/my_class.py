@@ -2,16 +2,19 @@
 from pydantic import BaseModel
 import rustantic_test
 from pydantic import Field
-from rustantic_test.generated.nested import Nested as PydanticNested
+from rustantic_test.generated.my_unit_enum import MyUnitEnum
+from rustantic_test.generated.nested import Nested
 
 class MyClass(BaseModel):
     name: str
     num2: int = Field(..., ge=0)
-    nested: PydanticNested
+    nested: Nested
+    myenum: MyUnitEnum
 
     def to_rs(self):
         return rustantic_test.MyClass(
             name=self.name,
             num2=self.num2,
             nested=self.nested.to_rs(),
+            myenum=self.myenum.to_rs(),
         )

@@ -1,4 +1,4 @@
-use syn::{Fields, Type};
+use syn::Type;
 
 #[derive(Clone)]
 pub struct ConstructorMetadata {
@@ -6,16 +6,18 @@ pub struct ConstructorMetadata {
 }
 
 #[derive(Clone)]
-pub struct PydanticMetadata {
+pub(crate) struct StructMetadata {
     pub ident: String,
-    pub fields: Fields,
     pub constructor: Option<ConstructorMetadata>,
 }
 
-impl PydanticMetadata {
+impl StructMetadata {
     pub fn set_ctor(&mut self, ctor: ConstructorMetadata) {
         self.constructor = Some(ctor);
     }
 }
 
-unsafe impl Sync for PydanticMetadata {}
+pub(crate) struct UnitEnumMetadata {
+    pub ident: String,
+    pub variants: Vec<(String, Option<String>)>,
+}

@@ -2,7 +2,7 @@ use pyo3::prelude::*;
 use rustantic_macros::pydantic;
 
 #[pydantic]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone)]
 pub struct Nested {
     pub name: String,
     pub num: u32,
@@ -17,23 +17,34 @@ impl Nested {
 }
 
 #[pydantic]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone)]
+enum MyUnitEnum {
+    A,
+    B = 300,
+    C = 900,
+    D,
+}
+
+#[pydantic]
+#[derive(Clone)]
 struct MyClass {
     pub name: String,
     pub num: u32,
     pub vec: Vec<f32>,
     pub nested: Nested,
+    pub myenum: MyUnitEnum,
 }
 
 #[pymethods]
 impl MyClass {
     #[new]
-    pub fn new(name: String, num2: u32, nested: Nested) -> PyResult<Self> {
+    pub fn new(name: String, num2: u32, nested: Nested, myenum: MyUnitEnum) -> PyResult<Self> {
         Ok(Self {
             name,
             num: num2,
             vec: vec![],
             nested,
+            myenum,
         })
     }
 }
