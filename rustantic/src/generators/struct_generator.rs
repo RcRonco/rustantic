@@ -25,11 +25,7 @@ impl PydanticCodeGeneratorFactory for StructCodeGenerator {
 
 impl PydanticCodeGenerator for StructCodeGenerator {
     fn is_item_supported(&self, meta: &ItemMetadata) -> bool {
-        if let ItemMetadata::Struct(_) = meta {
-            true
-        } else {
-            false
-        }
+        matches!(meta, ItemMetadata::Struct(_))
     }
 
     fn generate(

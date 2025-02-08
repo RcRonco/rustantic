@@ -22,9 +22,16 @@ pub(crate) struct UnitEnumMetadata {
     pub variants: Vec<(String, Option<String>)>,
 }
 
+pub(crate) struct UnionVariantMetadata {
+    pub ident: String,
+    pub ty_ident: Option<String>,
+    #[allow(unused)]
+    pub named_fields: Option<FieldsNamed>,
+}
+
 pub(crate) struct DiscriminatedUnionMetadata {
     pub ident: String,
-    pub variants: Vec<(String, Option<FieldsNamed>)>,
+    pub variants: Vec<UnionVariantMetadata>,
 }
 
 pub(crate) enum ItemMetadata {

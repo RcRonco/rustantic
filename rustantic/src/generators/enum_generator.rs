@@ -15,11 +15,7 @@ impl PydanticCodeGeneratorFactory for EnumCodeGenerator {
 
 impl PydanticCodeGenerator for EnumCodeGenerator {
     fn is_item_supported(&self, meta: &ItemMetadata) -> bool {
-        if let ItemMetadata::UnitEnum(_) = meta {
-            true
-        } else {
-            false
-        }
+        matches!(meta, ItemMetadata::UnitEnum(_))
     }
 
     fn generate(

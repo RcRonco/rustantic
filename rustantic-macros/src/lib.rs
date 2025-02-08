@@ -22,7 +22,7 @@ pub fn pydantic(_attr: TokenStream, item: TokenStream) -> TokenStream {
             // but you could also register it for code-generation purposes.
             // Here we simply return the enum unmodified.
             quote! {
-                #[pyclass(eq, eq_int)]
+                #[pyclass]
                 #[derive(PartialEq)]
                 #item_enum
             }

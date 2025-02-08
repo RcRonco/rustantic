@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use pyo3::prelude::*;
 use rustantic_macros::pydantic;
 
@@ -20,11 +21,12 @@ impl Nested {
 #[derive(Clone)]
 enum MyEnum {
     A(Nested),
-    B { a: i64, b: bool },
+    B(Nested),
     C(i16),
 }
 
 #[pydantic]
+#[pyo3(eq, eq_int)]
 #[derive(Clone)]
 enum MyUnitEnum {
     A,

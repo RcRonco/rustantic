@@ -1,5 +1,6 @@
 use crate::models::{
-    ConstructorMetadata, DiscriminatedUnionMetadata, ItemMetadata, StructMetadata, UnitEnumMetadata,
+    ConstructorMetadata, DiscriminatedUnionMetadata, ItemMetadata, StructMetadata,
+    UnionVariantMetadata, UnitEnumMetadata,
 };
 use std::{collections::HashMap, fs, path::PathBuf};
 use syn::{
@@ -149,8 +150,12 @@ impl MetadataCollector {
             match variant.fields {
                 syn::Fields::Unnamed(ref unnamed) => {
                     let var_ty = &unnamed.unnamed.first().unwrap().ty;
-                    let var_ident = quote::quote!(#var_ty).to_string();
-                    variants.push((var_ident, None))
+                    let ty_ident = quote::quote!(#var_ty).to_string();
+                    variants.push(UnionVariantMetadata {
+                        ident: variant.ident.to_string(),
+                        ty_ident: Some(ty_ident),
+                        named_fields: None,
+                    });
                 }
                 _ => {
                     println!(
