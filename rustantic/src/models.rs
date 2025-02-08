@@ -1,4 +1,4 @@
-use syn::Type;
+use syn::{FieldsNamed, Type};
 
 #[derive(Clone)]
 pub struct ConstructorMetadata {
@@ -20,4 +20,25 @@ impl StructMetadata {
 pub(crate) struct UnitEnumMetadata {
     pub ident: String,
     pub variants: Vec<(String, Option<String>)>,
+}
+
+pub(crate) struct DiscriminatedUnionMetadata {
+    pub ident: String,
+    pub variants: Vec<(String, Option<FieldsNamed>)>,
+}
+
+pub(crate) enum ItemMetadata {
+    Struct(StructMetadata),
+    UnitEnum(UnitEnumMetadata),
+    DiscriminatedUnion(DiscriminatedUnionMetadata),
+}
+
+impl ItemMetadata {
+    pub(crate) fn ident(&self) -> &str {
+        match self {
+            ItemMetadata::Struct(struct_md) => &struct_md.ident,
+            ItemMetadata::UnitEnum(enum_md) => &enum_md.ident,
+            ItemMetadata::DiscriminatedUnion(union_md) => &union_md.ident,
+        }
+    }
 }

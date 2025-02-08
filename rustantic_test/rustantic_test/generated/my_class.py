@@ -2,8 +2,8 @@
 from pydantic import BaseModel
 import rustantic_test
 from pydantic import Field
-from rustantic_test.generated.my_unit_enum import MyUnitEnum
 from rustantic_test.generated.nested import Nested
+from rustantic_test.generated.my_unit_enum import MyUnitEnum
 
 class MyClass(BaseModel):
     name: str

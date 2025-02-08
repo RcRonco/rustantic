@@ -1,4 +1,6 @@
-use crate::models::{ConstructorMetadata, StructMetadata, UnitEnumMetadata};
+use crate::models::{
+    ConstructorMetadata, DiscriminatedUnionMetadata, ItemMetadata, StructMetadata, UnitEnumMetadata,
+};
 use std::{collections::HashMap, fs, path::PathBuf};
 use syn::{
     parse_file, visit::Visit, Attribute, FnArg, ImplItem, ImplItemFn, Item, ItemEnum, ItemImpl,
@@ -8,16 +10,14 @@ use walkdir::WalkDir;
 
 pub(crate) struct MetadataCollector {
     lib_location: PathBuf,
-    structs: HashMap<String, StructMetadata>,
-    unit_enums: HashMap<String, UnitEnumMetadata>,
+    entities: HashMap<String, ItemMetadata>,
 }
 
 impl MetadataCollector {
     pub fn new(lib_location: &str) -> Self {
         Self {
             lib_location: PathBuf::from(lib_location),
-            structs: HashMap::new(),
-            unit_enums: HashMap::new(),
+            entities: HashMap::new(),
         }
     }
 
@@ -25,16 +25,12 @@ impl MetadataCollector {
         self.scan_lib();
     }
 
-    pub fn structs(&self) -> &HashMap<String, StructMetadata> {
-        &self.structs
-    }
-
-    pub fn unit_enum(&self) -> &HashMap<String, UnitEnumMetadata> {
-        &self.unit_enums
+    pub fn entities(&self) -> &HashMap<String, ItemMetadata> {
+        &self.entities
     }
 
     pub fn contains_ident(&self, ident: &str) -> bool {
-        self.structs.contains_key(ident) || self.unit_enums.contains_key(ident)
+        self.entities.contains_key(ident)
     }
 
     fn scan_lib(&mut self) {
@@ -75,12 +71,12 @@ impl MetadataCollector {
     }
 
     fn collect_pydantic_struct(&mut self, item_struct: &ItemStruct) {
-        self.structs.insert(
+        self.entities.insert(
             item_struct.ident.to_string(),
-            StructMetadata {
+            ItemMetadata::Struct(StructMetadata {
                 ident: item_struct.ident.to_string(),
                 constructor: None,
-            },
+            }),
         );
     }
 
@@ -103,29 +99,70 @@ impl MetadataCollector {
             })
             .collect();
 
-        if let Some(struct_meta) = self.structs.get_mut(item_ident) {
-            struct_meta.set_ctor(ConstructorMetadata { args });
+        if let Some(meta) = self.entities.get_mut(item_ident) {
+            if let ItemMetadata::Struct(struct_meta) = meta {
+                struct_meta.set_ctor(ConstructorMetadata { args });
+            }
         }
     }
 
-    fn collect_pydantic_enum(&mut self, item_enum: &ItemEnum) {
-        let mut variants = Vec::new();
+    fn is_discriminated_union(&self, item_enum: &ItemEnum) -> bool {
         for variant in item_enum.variants.iter() {
-            if let Some((_, ref expr)) = variant.discriminant {
-                variants.push((
-                    variant.ident.to_string(),
-                    Some(quote::quote!(#expr).to_string()),
-                ));
-            } else {
-                variants.push((variant.ident.to_string(), None));
+            if variant.discriminant.is_some() || variant.fields.is_empty() {
+                return false;
             }
         }
-        self.unit_enums.insert(
-            item_enum.ident.to_string(),
-            UnitEnumMetadata {
-                ident: item_enum.ident.to_string(),
-                variants,
-            },
+
+        return true;
+    }
+
+    fn collect_pydantic_enum(&mut self, item_enum: &ItemEnum) {
+        if self.is_discriminated_union(item_enum) {
+            self.collect_pydantic_unions(item_enum);
+        } else {
+            let variants: Vec<(String, Option<String>)> = item_enum
+                .variants
+                .iter()
+                .map(|variant| {
+                    let ident_str = variant.ident.to_string();
+                    if let Some((_, ref expr)) = variant.discriminant {
+                        (ident_str, Some(quote::quote!(#expr).to_string()))
+                    } else {
+                        (ident_str, None)
+                    }
+                })
+                .collect();
+            self.entities.insert(
+                item_enum.ident.to_string(),
+                ItemMetadata::UnitEnum(UnitEnumMetadata {
+                    ident: item_enum.ident.to_string(),
+                    variants,
+                }),
+            );
+        }
+    }
+
+    fn collect_pydantic_unions(&mut self, item_enum: &ItemEnum) {
+        let ident = item_enum.ident.to_string();
+        let mut variants = Vec::with_capacity(item_enum.variants.len());
+        for variant in item_enum.variants.iter() {
+            match variant.fields {
+                syn::Fields::Unnamed(ref unnamed) => {
+                    let var_ty = &unnamed.unnamed.first().unwrap().ty;
+                    let var_ident = quote::quote!(#var_ty).to_string();
+                    variants.push((var_ident, None))
+                }
+                _ => {
+                    println!(
+                        "cargo:error=Rustantic collector don't support variants kinds except unnamed for discriminated unions"
+                    );
+                }
+            };
+        }
+
+        self.entities.insert(
+            ident.clone(),
+            ItemMetadata::DiscriminatedUnion(DiscriminatedUnionMetadata { ident, variants }),
         );
     }
 }
@@ -162,7 +199,7 @@ impl<'ast> Visit<'ast> for MetadataCollector {
             "Unknown".to_string()
         };
 
-        if self.structs.contains_key(&type_name) {
+        if self.entities.contains_key(&type_name) {
             for item in &node.items {
                 if let ImplItem::Fn(ref item_fn) = item {
                     if self.is_pyo_constructor(item_fn) {
