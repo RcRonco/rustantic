@@ -50,7 +50,7 @@ impl UnionCodeGenerator {
     ) -> String {
         let discriminator = self.generate_discriminator(meta);
         let variants = self.generate_union_variants(config.clone(), collector, meta);
-        let definition = self.generate_type_definitions(meta);
+        let definition = self.generate_type_definitions(&config, meta);
         let imports = self.generate_import(&variants.additional_imports);
         format!(
             "# Missing to_rs function\n{}\n\n{}\n{}\n{}",
@@ -128,7 +128,11 @@ impl UnionCodeGenerator {
         result
     }
 
-    fn generate_type_definitions(&self, meta: &DiscriminatedUnionMetadata) -> String {
+    fn generate_type_definitions(
+        &self,
+        config: &GeneratorConfig,
+        meta: &DiscriminatedUnionMetadata,
+    ) -> String {
         let variants: Vec<String> = meta
             .variants
             .iter()
@@ -142,11 +146,34 @@ impl UnionCodeGenerator {
                 "    root: {}Type = Field(..., discriminator=\"kind\")",
                 &meta.ident
             ),
+            self.generate_to_pyo3(config, meta),
         ]
         .join("\n")
     }
 
     fn generate_discriminator_name(&self, ident: &str) -> String {
         format!("{}Discriminator", ident)
+    }
+
+    fn generate_to_pyo3(
+        &self,
+        config: &GeneratorConfig,
+        meta: &DiscriminatedUnionMetadata,
+    ) -> String {
+        let mut code = "    def to_rs(self):\n".to_owned();
+        code.push_str("        val: Any = (self.root.value.to_rs() if hasattr(self.root.value, \"to_rs\") else self.root.value)\n");
+        code.push_str("        match self.root.kind:\n");
+        for variant in meta.variants.iter() {
+            code.push_str(&format!(
+                "            case {}.{}: return {}.{}.{}(val)\n",
+                self.generate_discriminator_name(&meta.ident),
+                &variant.ident,
+                config.package_name,
+                &meta.ident,
+                &variant.ident,
+            ));
+        }
+
+        code
     }
 }
