@@ -1,7 +1,26 @@
 [package]
 name = "rustantic"
 version = "0.2.0"
+license = "MIT OR Apache-2.0"
+keywords = ["pyo3", "python", "ffi"]
+authors = [
+    "Rustantic Project and Contributors <https://github.com/RcRonco/rustantic>",
+]
+description = "Rust to Pydantic generator"
+homepage = "https://github.com/RcRonco/rustantic"
+repository = "https://github.com/RcRonco/rustantic"
 edition = "2021"
+categories = ["development-tools::ffi"]
+exclude = [
+    "/.gitignore",
+    ".cargo/config",
+    "/codecov.yml",
+    "/Makefile",
+    "/pyproject.toml",
+    "/noxfile.py",
+    "/.github",
+    "/tests/ui",
+]
 
 [dependencies]
 syn = { version = "2.0.98", features = ["visit", "full", "derive", "parsing"] }

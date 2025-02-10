@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use itertools::sorted;
+use itertools::{sorted, Itertools};
 
 use crate::{
     collector::MetadataCollector,
@@ -51,21 +51,26 @@ impl UnionCodeGenerator {
         let discriminator = self.generate_discriminator(meta);
         let variants = self.generate_union_variants(config.clone(), collector, meta);
         let definition = self.generate_type_definitions(&config, meta);
-        let imports = self.generate_import(&variants.additional_imports);
+        let imports = self.generate_import(config.package_name, &variants.additional_imports);
         format!(
             "# Missing to_rs function\n{}\n\n{}\n{}\n{}",
             imports, discriminator, variants.code, definition
         )
     }
 
-    fn generate_import(&self, additional_imports: &HashSet<String>) -> String {
-        let mut code = "import enum\n\
-         from typing import Annotated, Literal, Union\n\
-         from pydantic import BaseModel, Discriminator, Field, RootModel\n"
-            .to_string();
+    fn generate_import(&self, package_name: &str, additional_imports: &HashSet<String>) -> String {
+        let mut imports: HashSet<String> = vec![
+            "import enum".to_owned(),
+            "from typing import Literal, Union, Any".to_owned(),
+            "from pydantic import BaseModel, Field, RootModel".to_owned(),
+            format!("import {}", package_name),
+        ]
+        .into_iter()
+        .collect();
 
-        sorted(additional_imports).for_each(|s| code.push_str(&format!("{}\n", s)));
-        code
+        imports.extend(additional_imports.iter().map(|i| i.to_owned()));
+
+        sorted(imports).join("\n")
     }
 
     fn generate_discriminator(&self, meta: &DiscriminatedUnionMetadata) -> String {
@@ -160,20 +165,24 @@ impl UnionCodeGenerator {
         config: &GeneratorConfig,
         meta: &DiscriminatedUnionMetadata,
     ) -> String {
-        let mut code = "    def to_rs(self):\n".to_owned();
-        code.push_str("        val: Any = (self.root.value.to_rs() if hasattr(self.root.value, \"to_rs\") else self.root.value)\n");
-        code.push_str("        match self.root.kind:\n");
+        let mut code_sections = vec![
+            "    def to_rs(self):".to_owned(),
+            "        inner_to_rs = getattr(self.root.value, \"to_rs\", lambda v: v)".to_string(),
+            "        val: Any = inner_to_rs(self.root.value)".to_string(),
+            "        match self.root.kind:".to_string(),
+        ];
         for variant in meta.variants.iter() {
-            code.push_str(&format!(
-                "            case {}.{}: return {}.{}.{}(val)\n",
+            code_sections.push(format!(
+                "            case {}.{}:",
                 self.generate_discriminator_name(&meta.ident),
-                &variant.ident,
-                config.package_name,
-                &meta.ident,
-                &variant.ident,
+                &variant.ident
+            ));
+            code_sections.push(format!(
+                "                return {}.{}.{}(val)\n",
+                config.package_name, &meta.ident, &variant.ident,
             ));
         }
 
-        code
+        code_sections.join("\n")
     }
 }
