@@ -62,6 +62,8 @@ impl MyClass {
 fn rustantic_test(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Nested>()?;
     m.add_class::<MyClass>()?;
+    m.add_class::<MyUnitEnum>()?;
+    m.add_class::<MyEnum>()?;
 
     Ok(())
 }

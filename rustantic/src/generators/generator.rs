@@ -83,7 +83,25 @@ impl PydanticGenerator {
         let mut path = PathBuf::from(&self.base_path);
         path.push("__init__.py");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(&path, "").unwrap();
+        fs::write(&path, self.generate_init_code()).unwrap();
+    }
+
+    fn generate_init_code(&self) -> String {
+        let mut code: Vec<String> = self
+            .collector
+            .entities()
+            .iter()
+            .map(|(k, _)| format!("from .{} import {}", k.to_case(Case::Snake), k))
+            .collect();
+        code.push("\n__all__ = [".to_owned());
+        code.extend(
+            self.collector
+                .entities()
+                .iter()
+                .map(|(k, _)| format!("    \"{}\",", k)),
+        );
+        code.push("]".to_owned());
+        code.join("\n")
     }
 
     fn create_pydantic_file(&self, ident: &str, generated_code: &str) {
