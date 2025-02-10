@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
-use itertools::{sorted, Itertools};
-
 use crate::{
     collector::MetadataCollector,
     models::{DiscriminatedUnionMetadata, ItemMetadata, UnionVariantMetadata},
 };
+use itertools::{sorted, Itertools};
+use syn::{Type, TypeNever};
 
 use super::{
     field_generator::FieldGenerator,
@@ -114,7 +114,9 @@ impl UnionCodeGenerator {
         let mut result = GenerationResult::default();
         let field_gen = field_generator.generate(
             "value",
-            variant.ty.as_ref().expect("Named enum not supported"),
+            variant.ty.as_ref().unwrap_or(&Type::Never(TypeNever {
+                bang_token: Default::default(),
+            })),
         );
         let code = vec![
             format!("class {0}{1}(BaseModel):", &meta.ident, &variant.ident),
