@@ -9,6 +9,13 @@ pub struct Nested {
     pub num: u32,
 }
 
+#[pydantic]
+#[derive(Clone, PartialEq)]
+pub struct Nested2 {
+    pub name: String,
+    pub num: u32,
+}
+
 #[pymethods]
 impl Nested {
     #[new]

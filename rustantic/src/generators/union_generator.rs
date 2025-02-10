@@ -53,8 +53,8 @@ impl UnionCodeGenerator {
         let definition = self.generate_type_definitions(&config, meta);
         let imports = self.generate_import(config.package_name, &variants.additional_imports);
         format!(
-            "# Missing to_rs function\n{}\n\n{}\n{}\n{}",
-            imports, discriminator, variants.code, definition
+            "{}\n{}\n\n{}\n{}\n{}",
+            config.header_comment, imports, discriminator, variants.code, definition
         )
     }
 

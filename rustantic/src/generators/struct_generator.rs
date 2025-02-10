@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use super::field_generator::FieldGenerator;
+use super::generator_base::GenerationResult;
 use super::generator_base::GeneratorConfig;
 use super::generator_base::PydanticCodeGenerator;
 use super::generator_base::PydanticCodeGeneratorFactory;
@@ -9,6 +10,7 @@ use crate::models::ConstructorMetadata;
 use crate::models::ItemMetadata;
 use crate::models::StructMetadata;
 use itertools::sorted;
+use itertools::Itertools;
 
 pub(crate) struct StructCodeGenerator {}
 
@@ -44,40 +46,106 @@ impl StructCodeGenerator {
         collector: &MetadataCollector,
         meta: &StructMetadata,
     ) -> String {
-        let mut import_code = format!(
-            "from pydantic import BaseModel\nimport {}\n",
-            config.package_name
-        );
-        let mut code = format!("class {}(BaseModel):\n", &meta.ident);
-        let mut additional_imports: HashSet<String> = HashSet::new();
         let field_generator = FieldGenerator::new(config.clone(), collector.entities());
 
+        let class_declaration = format!("class {}(BaseModel):", &meta.ident);
+        let class_definition = self.generate_definition(&config, &field_generator, collector, meta);
+        let import_code =
+            self.generate_import(config.package_name, &class_definition.additional_imports);
+
+        format!(
+            "{}\n{}\n\n{}\n{}",
+            config.header_comment, import_code, class_declaration, class_definition.code
+        )
+    }
+
+    fn generate_import(&self, package_name: &str, additional_imports: &HashSet<String>) -> String {
+        let mut imports: HashSet<String> = vec![
+            "from pydantic import BaseModel, Field".to_owned(),
+            format!("import {}", package_name),
+        ]
+        .into_iter()
+        .collect();
+
+        imports.extend(additional_imports.iter().map(|i| i.to_owned()));
+
+        sorted(imports).join("\n")
+    }
+
+    fn generate_definition(
+        &self,
+        config: &GeneratorConfig,
+        field_generator: &FieldGenerator,
+        collector: &MetadataCollector,
+        meta: &StructMetadata,
+    ) -> GenerationResult {
         match meta.constructor {
-            Some(ref ctor) => {
-                for (arg_name, arg_ty) in ctor.args.iter() {
-                    let field_result = field_generator.generate(&arg_name, arg_ty);
-                    additional_imports.extend(field_result.additional_imports);
-                    code.push_str(&format!("    {}\n", field_result.code));
-                }
-                code.push_str("\n");
-                code.push_str(&self.generate_to_pyo3(
-                    &field_generator,
-                    config.package_name,
-                    &meta.ident,
-                    ctor,
-                    collector,
-                ));
-            }
-            None => {
-                code.push_str(
-                    &self.generate_invalid_model_body(&meta.ident, "No pyo3 constructor"),
-                );
-            }
-        };
+            Some(ref ctor) => self.generate_ctor_based_definition(
+                config,
+                field_generator,
+                collector,
+                &meta.ident,
+                ctor,
+            ),
+            None => self.generate_fields_based_definition(field_generator, meta),
+        }
+    }
 
-        sorted(additional_imports).for_each(|s| import_code.push_str(&format!("{}\n", s)));
+    fn generate_ctor_based_definition(
+        &self,
+        config: &GeneratorConfig,
+        field_generator: &FieldGenerator,
+        collector: &MetadataCollector,
+        ident: &str,
+        ctor: &ConstructorMetadata,
+    ) -> GenerationResult {
+        let mut result = GenerationResult::default();
+        for (arg_name, arg_ty) in ctor.args.iter() {
+            let field_result = field_generator.generate(&arg_name, arg_ty);
+            result
+                .additional_imports
+                .extend(field_result.additional_imports);
+            result
+                .code
+                .push_str(&format!("    {}\n", field_result.code));
+        }
+        result.code.push_str("\n");
+        result.code.push_str(&self.generate_to_pyo3(
+            &field_generator,
+            config.package_name,
+            &ident,
+            ctor,
+            collector,
+        ));
+        result
+    }
 
-        format!("{}\n{}\n{}", config.header_comment, import_code, code)
+    fn generate_fields_based_definition(
+        &self,
+        field_generator: &FieldGenerator,
+        meta: &StructMetadata,
+    ) -> GenerationResult {
+        let mut result = GenerationResult::default();
+        if let syn::Fields::Named(ref fields_named) = meta.fields {
+            for field in fields_named.named.iter() {
+                let field_ident = field
+                    .ident
+                    .as_ref()
+                    .expect("Identifier cannot be empty for named fields")
+                    .to_string();
+                let field_result = field_generator.generate(&field_ident, &field.ty);
+                result
+                    .additional_imports
+                    .extend(field_result.additional_imports);
+                result
+                    .code
+                    .push_str(&format!("    {}\n", field_result.code));
+            }
+        } else {
+            result.code = self.generate_invalid_model_body(&meta.ident, "No pyo3 constructor");
+        }
+
+        result
     }
 
     fn generate_invalid_model_body(&self, ident: &str, error: &str) -> String {

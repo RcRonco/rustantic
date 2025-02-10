@@ -3,12 +3,6 @@ from pydantic import BaseModel, Field
 from pydantic import Field
 import rustantic_test
 
-class Nested(BaseModel):
+class Nested2(BaseModel):
     name: str
     num: int = Field(..., ge=0)
-
-    def to_rs(self):
-        return rustantic_test.Nested(
-            name=self.name,
-            num=self.num,
-        )

@@ -1,4 +1,4 @@
-use syn::{FieldsNamed, Type};
+use syn::{Fields, FieldsNamed, Type};
 
 #[derive(Clone)]
 pub struct ConstructorMetadata {
@@ -9,6 +9,7 @@ pub struct ConstructorMetadata {
 pub(crate) struct StructMetadata {
     pub ident: String,
     pub constructor: Option<ConstructorMetadata>,
+    pub fields: Fields,
 }
 
 impl StructMetadata {

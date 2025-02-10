@@ -77,6 +77,7 @@ impl MetadataCollector {
             ItemMetadata::Struct(StructMetadata {
                 ident: item_struct.ident.to_string(),
                 constructor: None,
+                fields: item_struct.fields.clone(),
             }),
         );
     }
