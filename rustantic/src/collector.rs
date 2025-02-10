@@ -149,11 +149,9 @@ impl MetadataCollector {
         for variant in item_enum.variants.iter() {
             match variant.fields {
                 syn::Fields::Unnamed(ref unnamed) => {
-                    let var_ty = &unnamed.unnamed.first().unwrap().ty;
-                    let ty_ident = quote::quote!(#var_ty).to_string();
                     variants.push(UnionVariantMetadata {
                         ident: variant.ident.to_string(),
-                        ty_ident: Some(ty_ident),
+                        ty: Some(unnamed.unnamed.first().unwrap().ty.clone()),
                         named_fields: None,
                     });
                 }

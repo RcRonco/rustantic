@@ -24,7 +24,7 @@ pub(crate) struct UnitEnumMetadata {
 
 pub(crate) struct UnionVariantMetadata {
     pub ident: String,
-    pub ty_ident: Option<String>,
+    pub ty: Option<Type>,
     #[allow(unused)]
     pub named_fields: Option<FieldsNamed>,
 }

@@ -1,12 +1,17 @@
 use std::collections::HashSet;
 
+use itertools::sorted;
+
 use crate::{
     collector::MetadataCollector,
     models::{DiscriminatedUnionMetadata, ItemMetadata, UnionVariantMetadata},
 };
 
-use super::generator_base::{
-    GenerationResult, GeneratorConfig, PydanticCodeGenerator, PydanticCodeGeneratorFactory,
+use super::{
+    field_generator::FieldGenerator,
+    generator_base::{
+        GenerationResult, GeneratorConfig, PydanticCodeGenerator, PydanticCodeGeneratorFactory,
+    },
 };
 
 pub(crate) struct UnionCodeGenerator {}
@@ -29,7 +34,7 @@ impl PydanticCodeGenerator for UnionCodeGenerator {
         meta: &ItemMetadata,
     ) -> Result<String, ()> {
         if let ItemMetadata::DiscriminatedUnion(union_md) = meta {
-            Ok(self.generate_code(&config, collector, union_md))
+            Ok(self.generate_code(config, collector, union_md))
         } else {
             Err(())
         }
@@ -39,12 +44,12 @@ impl PydanticCodeGenerator for UnionCodeGenerator {
 impl UnionCodeGenerator {
     fn generate_code(
         &self,
-        config: &GeneratorConfig,
+        config: GeneratorConfig,
         collector: &MetadataCollector,
         meta: &DiscriminatedUnionMetadata,
     ) -> String {
         let discriminator = self.generate_discriminator(meta);
-        let variants = self.generate_union_variants(config, collector, meta);
+        let variants = self.generate_union_variants(config.clone(), collector, meta);
         let definition = self.generate_type_definitions(meta);
         let imports = self.generate_import(&variants.additional_imports);
         format!(
@@ -56,12 +61,10 @@ impl UnionCodeGenerator {
     fn generate_import(&self, additional_imports: &HashSet<String>) -> String {
         let mut code = "import enum\n\
          from typing import Annotated, Literal, Union\n\
-         from pydantic import BaseModel, Discriminator, Field, RootModel"
+         from pydantic import BaseModel, Discriminator, Field, RootModel\n"
             .to_string();
 
-        additional_imports
-            .iter()
-            .for_each(|s| code.push_str(&format!("{}\n", s)));
+        sorted(additional_imports).for_each(|s| code.push_str(&format!("{}\n", s)));
         code
     }
 
@@ -79,14 +82,15 @@ impl UnionCodeGenerator {
 
     fn generate_union_variants(
         &self,
-        config: &GeneratorConfig,
+        config: GeneratorConfig,
         collector: &MetadataCollector,
         meta: &DiscriminatedUnionMetadata,
     ) -> GenerationResult {
+        let field_generator = FieldGenerator::new(config.clone(), collector.entities());
         let mut variants = vec![];
         let mut result = GenerationResult::default();
         for variant in meta.variants.iter() {
-            let variant_code = self.generate_union_variant(config, collector, meta, variant);
+            let variant_code = self.generate_union_variant(&field_generator, meta, variant);
             result
                 .additional_imports
                 .extend(variant_code.additional_imports);
@@ -98,12 +102,15 @@ impl UnionCodeGenerator {
 
     fn generate_union_variant(
         &self,
-        _: &GeneratorConfig,
-        _: &MetadataCollector,
+        field_generator: &FieldGenerator,
         meta: &DiscriminatedUnionMetadata,
         variant: &UnionVariantMetadata,
     ) -> GenerationResult {
         let mut result = GenerationResult::default();
+        let field_gen = field_generator.generate(
+            "value",
+            variant.ty.as_ref().expect("Named enum not supported"),
+        );
         let code = vec![
             format!("class {0}{1}(BaseModel):", &meta.ident, &variant.ident),
             format!(
@@ -111,16 +118,13 @@ impl UnionCodeGenerator {
                 self.generate_discriminator_name(&meta.ident),
                 &variant.ident
             ),
-            format!(
-                "    value: {0} # Type unresolved!",
-                variant
-                    .ty_ident
-                    .as_ref()
-                    .expect("Only unnamed variants supported")
-            ),
+            format!("    {}", field_gen.code),
             "\n".to_string(),
         ];
         result.code = code.join("\n");
+        result
+            .additional_imports
+            .extend(field_gen.additional_imports);
         result
     }
 
@@ -133,11 +137,7 @@ impl UnionCodeGenerator {
 
         vec![
             format!("{}Type = Union[{}]", &meta.ident, variants.join(",")),
-            format!(
-                "{0} = Annotated[{0}Type, Discriminator(\"kind\")]",
-                &meta.ident
-            ),
-            format!("\nclass {0}RootModel(RootModel[{0}Type]):", &meta.ident),
+            format!("\nclass {0}(RootModel[{0}Type]):", &meta.ident),
             format!(
                 "    root: {}Type = Field(..., discriminator=\"kind\")",
                 &meta.ident

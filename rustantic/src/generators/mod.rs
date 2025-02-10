@@ -1,4 +1,5 @@
 pub mod enum_generator;
+pub mod field_generator;
 pub mod generator;
 pub mod generator_base;
 pub mod struct_generator;

@@ -7,23 +7,7 @@ pub(crate) struct GenerationResult {
     pub additional_imports: HashSet<String>,
 }
 
-impl GenerationResult {
-    pub(crate) fn add_any_import(&mut self) {
-        self.additional_imports
-            .insert("from typing import Any".to_string());
-    }
-
-    pub(crate) fn add_optional_import(&mut self) {
-        self.additional_imports
-            .insert("from typing import Optional".to_string());
-    }
-
-    pub(crate) fn add_pydantic_field_import(&mut self) {
-        self.additional_imports
-            .insert("from pydantic import Field".to_string());
-    }
-}
-
+#[derive(Clone)]
 pub(crate) struct GeneratorConfig<'a> {
     pub header_comment: &'a str,
     pub package_name: &'a str,
