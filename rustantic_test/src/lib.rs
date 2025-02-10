@@ -26,7 +26,6 @@ enum MyEnum {
 }
 
 #[pydantic]
-#[pyo3(eq, eq_int)]
 #[derive(Clone)]
 enum MyUnitEnum {
     A,
