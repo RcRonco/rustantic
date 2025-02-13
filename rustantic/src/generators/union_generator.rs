@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use itertools::{sorted, Itertools};
+use syn::{Type, TypeNever};
 
 use crate::{
     collector::MetadataCollector,
@@ -114,7 +115,7 @@ impl UnionCodeGenerator {
         let mut result = GenerationResult::default();
         let field_gen = field_generator.generate(
             "value",
-            variant.ty.as_ref().expect("Named enum not supported"),
+            variant.ty.as_ref().unwrap_or(&Type::Never(TypeNever {bang_token: Default::default()})),
         );
         let code = vec![
             format!("class {0}{1}(BaseModel):", &meta.ident, &variant.ident),
@@ -177,10 +178,21 @@ impl UnionCodeGenerator {
                 self.generate_discriminator_name(&meta.ident),
                 &variant.ident
             ));
+            match variant.ty {
+                Some(_) => {
             code_sections.push(format!(
                 "                return {}.{}.{}(val)\n",
                 config.package_name, &meta.ident, &variant.ident,
             ));
+                }
+                None => {
+                    code_sections.push(format!(
+                        "                return {}.{}.{}()\n",
+                        config.package_name, &meta.ident, &variant.ident,
+                    ));
+                }
+            }
+
         }
 
         code_sections.join("\n")

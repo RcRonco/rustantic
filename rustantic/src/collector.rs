@@ -108,6 +108,7 @@ impl MetadataCollector {
         }
     }
 
+    #[allow(dead_code)]
     fn is_discriminated_union(&self, item_enum: &ItemEnum) -> bool {
         for variant in item_enum.variants.iter() {
             if variant.discriminant.is_some() || variant.fields.is_empty() {
@@ -118,10 +119,16 @@ impl MetadataCollector {
         return true;
     }
 
+    // Check for pyo3 simple enum: https://pyo3.rs/v0.23.1/class.html#simple-enums
+    fn is_simple_enum(&self, item_enum: &ItemEnum) -> bool {
+        item_enum
+            .variants
+            .iter()
+            .all(|variant| matches!(variant.fields, syn::Fields::Unit))
+    }
+
     fn collect_pydantic_enum(&mut self, item_enum: &ItemEnum) {
-        if self.is_discriminated_union(item_enum) {
-            self.collect_pydantic_unions(item_enum);
-        } else {
+        if self.is_simple_enum(item_enum) {
             let variants: Vec<(String, Option<String>)> = item_enum
                 .variants
                 .iter()
@@ -141,6 +148,12 @@ impl MetadataCollector {
                     variants,
                 }),
             );
+        } else {
+            println!(
+                "cargo:warning=Creating discriminated union from enum {}",
+                item_enum.ident.to_string()
+            );
+            self.collect_pydantic_unions(item_enum);
         }
     }
 
@@ -150,9 +163,15 @@ impl MetadataCollector {
         for variant in item_enum.variants.iter() {
             match variant.fields {
                 syn::Fields::Unnamed(ref unnamed) => {
+                    // TODO: Handle unnamed tuples
+                    let ty = match unnamed.unnamed.first() {
+                        Some(field) => Some(field.ty.clone()),
+                        None => None,
+                    };
+
                     variants.push(UnionVariantMetadata {
                         ident: variant.ident.to_string(),
-                        ty: Some(unnamed.unnamed.first().unwrap().ty.clone()),
+                        ty,
                         named_fields: None,
                     });
                 }
