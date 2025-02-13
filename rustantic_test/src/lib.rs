@@ -30,6 +30,7 @@ enum MyEnum {
     A(Nested),
     B(Nested),
     C(i16),
+    D(),
 }
 
 #[pydantic]

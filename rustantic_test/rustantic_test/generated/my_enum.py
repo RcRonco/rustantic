@@ -9,6 +9,7 @@ class MyEnumDiscriminator(enum.Enum):
     A = enum.auto()
     B = enum.auto()
     C = enum.auto()
+    D = enum.auto()
 
 
 class MyEnumA(BaseModel):
@@ -26,13 +27,17 @@ class MyEnumC(BaseModel):
     value: int
 
 
-MyEnumType = Union[MyEnumA,MyEnumB,MyEnumC]
+class MyEnumD(BaseModel):
+    kind: Literal[MyEnumDiscriminator.D] = Field(default=MyEnumDiscriminator.D, init=False, frozen=True)
+
+
+MyEnumType = Union[MyEnumA,MyEnumB,MyEnumC,MyEnumD]
 
 class MyEnum(RootModel[MyEnumType]):
     root: MyEnumType = Field(..., discriminator="kind")
     def to_rs(self):
-        inner_to_rs = getattr(self.root.value, "to_rs", lambda v: v)
-        val: Any = inner_to_rs(self.root.value)
+        inner_to_rs = getattr(getattr(self.root, "value", None), "to_rs", lambda v: v)
+        val: Any = inner_to_rs(getattr(self.root, "value", None))
         match self.root.kind:
             case MyEnumDiscriminator.A:
                 return rustantic_test.MyEnum.A(val)
@@ -42,3 +47,6 @@ class MyEnum(RootModel[MyEnumType]):
 
             case MyEnumDiscriminator.C:
                 return rustantic_test.MyEnum.C(val)
+
+            case MyEnumDiscriminator.D:
+                return rustantic_test.MyEnum.D()
