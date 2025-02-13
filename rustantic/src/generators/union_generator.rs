@@ -1,10 +1,12 @@
 use std::collections::HashSet;
 
+use itertools::{sorted, Itertools};
+use syn::{Type, TypeNever};
+
 use crate::{
     collector::MetadataCollector,
     models::{DiscriminatedUnionMetadata, ItemMetadata, UnionVariantMetadata},
 };
-use itertools::{sorted, Itertools};
 
 use super::{
     field_generator::FieldGenerator,
@@ -111,27 +113,24 @@ impl UnionCodeGenerator {
         variant: &UnionVariantMetadata,
     ) -> GenerationResult {
         let mut result = GenerationResult::default();
-        let mut code = vec![
+        let field_gen = field_generator.generate(
+            "value",
+            variant.ty.as_ref().unwrap_or(&Type::Never(TypeNever {bang_token: Default::default()})),
+        );
+        let code = vec![
             format!("class {0}{1}(BaseModel):", &meta.ident, &variant.ident),
             format!(
                 "    kind: Literal[{0}.{1}] = Field(default={0}.{1}, init=False, frozen=True)",
                 self.generate_discriminator_name(&meta.ident),
                 &variant.ident
             ),
+            format!("    {}", field_gen.code),
+            "\n".to_string(),
         ];
-
-        if let Some(ref ty) = variant.ty {
-            let field_gen = field_generator.generate("value", ty);
-
-            code.push(format!("    {}", field_gen.code));
-            result
-                .additional_imports
-                .extend(field_gen.additional_imports);
-        }
-
-        code.push("\n".to_string());
-
         result.code = code.join("\n");
+        result
+            .additional_imports
+            .extend(field_gen.additional_imports);
         result
     }
 
@@ -169,8 +168,8 @@ impl UnionCodeGenerator {
     ) -> String {
         let mut code_sections = vec![
             "    def to_rs(self):".to_owned(),
-            "        inner_to_rs = getattr(getattr(self.root, \"value\", None), \"to_rs\", lambda v: v)".to_string(),
-            "        val: Any = inner_to_rs(getattr(self.root, \"value\", None))".to_string(),
+            "        inner_to_rs = getattr(self.root.value, \"to_rs\", lambda v: v)".to_string(),
+            "        val: Any = inner_to_rs(self.root.value)".to_string(),
             "        match self.root.kind:".to_string(),
         ];
         for variant in meta.variants.iter() {
@@ -181,10 +180,10 @@ impl UnionCodeGenerator {
             ));
             match variant.ty {
                 Some(_) => {
-                    code_sections.push(format!(
-                        "                return {}.{}.{}(val)\n",
-                        config.package_name, &meta.ident, &variant.ident,
-                    ));
+            code_sections.push(format!(
+                "                return {}.{}.{}(val)\n",
+                config.package_name, &meta.ident, &variant.ident,
+            ));
                 }
                 None => {
                     code_sections.push(format!(
