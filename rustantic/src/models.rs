@@ -1,12 +1,17 @@
 use syn::{Fields, FieldsNamed, Type};
 
+pub enum ItemKind {
+    Request,
+    Response,
+}
+
 #[derive(Clone)]
 pub struct ConstructorMetadata {
     pub args: Vec<(String, Type)>,
 }
 
 #[derive(Clone)]
-pub(crate) struct StructMetadata {
+pub struct StructMetadata {
     pub ident: String,
     pub constructor: Option<ConstructorMetadata>,
     pub fields: Fields,
@@ -18,31 +23,31 @@ impl StructMetadata {
     }
 }
 
-pub(crate) struct UnitEnumMetadata {
+pub struct UnitEnumMetadata {
     pub ident: String,
     pub variants: Vec<(String, Option<String>)>,
 }
 
-pub(crate) struct UnionVariantMetadata {
+pub struct UnionVariantMetadata {
     pub ident: String,
     pub ty: Option<Type>,
     #[allow(unused)]
     pub named_fields: Option<FieldsNamed>,
 }
 
-pub(crate) struct DiscriminatedUnionMetadata {
+pub struct DiscriminatedUnionMetadata {
     pub ident: String,
     pub variants: Vec<UnionVariantMetadata>,
 }
 
-pub(crate) enum ItemMetadata {
+pub enum ItemMetadata {
     Struct(StructMetadata),
     UnitEnum(UnitEnumMetadata),
     DiscriminatedUnion(DiscriminatedUnionMetadata),
 }
 
 impl ItemMetadata {
-    pub(crate) fn ident(&self) -> &str {
+    pub fn ident(&self) -> &str {
         match self {
             ItemMetadata::Struct(struct_md) => &struct_md.ident,
             ItemMetadata::UnitEnum(enum_md) => &enum_md.ident,

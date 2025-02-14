@@ -5,6 +5,7 @@ use crate::collector::MetadataCollector;
 use crate::generators::generator_base::PydanticCodeGenerator;
 use crate::models::ItemMetadata;
 use convert_case::{Case, Casing};
+use itertools::Itertools;
 
 use super::generator_base::{GeneratorConfig, PydanticCodeGeneratorFactory};
 
@@ -92,13 +93,15 @@ impl PydanticGenerator {
             .entities()
             .iter()
             .map(|(k, _)| format!("from .{} import {}", k.to_case(Case::Snake), k))
+            .sorted()
             .collect();
         code.push("\n__all__ = [".to_owned());
         code.extend(
             self.collector
                 .entities()
                 .iter()
-                .map(|(k, _)| format!("    \"{}\",", k)),
+                .map(|(k, _)| format!("    \"{}\",", k))
+                .sorted(),
         );
         code.push("]".to_owned());
         code.join("\n")

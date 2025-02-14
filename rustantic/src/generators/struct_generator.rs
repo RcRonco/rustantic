@@ -49,7 +49,7 @@ impl StructCodeGenerator {
         let field_generator = FieldGenerator::new(config.clone(), collector.entities());
 
         let class_declaration = format!("class {}(BaseModel):", &meta.ident);
-        let class_definition = self.generate_definition(&config, &field_generator, collector, meta);
+        let class_definition = self.generate_definition(&config, &field_generator, meta);
         let import_code =
             self.generate_import(config.package_name, &class_definition.additional_imports);
 
@@ -76,18 +76,12 @@ impl StructCodeGenerator {
         &self,
         config: &GeneratorConfig,
         field_generator: &FieldGenerator,
-        collector: &MetadataCollector,
         meta: &StructMetadata,
     ) -> GenerationResult {
-        match meta.constructor {
-            Some(ref ctor) => self.generate_ctor_based_definition(
-                config,
-                field_generator,
-                collector,
-                &meta.ident,
-                ctor,
-            ),
-            None => self.generate_fields_based_definition(field_generator, meta),
+        if let Some(ref ctor) = meta.constructor {
+            self.generate_ctor_based_definition(config, field_generator, &meta.ident, ctor)
+        } else {
+            self.generate_fields_based_definition(field_generator, meta)
         }
     }
 
@@ -95,7 +89,6 @@ impl StructCodeGenerator {
         &self,
         config: &GeneratorConfig,
         field_generator: &FieldGenerator,
-        collector: &MetadataCollector,
         ident: &str,
         ctor: &ConstructorMetadata,
     ) -> GenerationResult {
@@ -115,7 +108,6 @@ impl StructCodeGenerator {
             config.package_name,
             &ident,
             ctor,
-            collector,
         ));
         result
     }
@@ -164,7 +156,6 @@ impl StructCodeGenerator {
         package_name: &str,
         struct_name: &str,
         ctor: &ConstructorMetadata,
-        collector: &MetadataCollector,
     ) -> String {
         let indent = "    ";
         let mut code = format!("{0}def to_rs(self):\n", indent);
@@ -173,18 +164,12 @@ impl StructCodeGenerator {
             indent, package_name, struct_name
         ));
         for (arg_name, arg_ty) in ctor.args.iter() {
-            if let Some(ident_str) = field_generator.get_type_ident(arg_ty) {
-                if collector.contains_ident(&ident_str) {
-                    code.push_str(&format!(
-                        "{0}{0}{0}{1}=self.{1}.to_rs(),\n",
-                        indent, arg_name
-                    ));
-                } else {
-                    code.push_str(&format!("{0}{0}{0}{1}=self.{1},\n", indent, arg_name));
-                }
-            } else {
-                code.push_str(&format!("{0}{0}{0}{1}=self.{1},\n", indent, arg_name));
-            }
+            let to_rs_field =
+                field_generator.generate_to_pyo3(&format!("self.{}", arg_name), arg_ty);
+            code.push_str(&format!(
+                "{0}{0}{0}{1}={2},\n",
+                indent, arg_name, to_rs_field
+            ));
         }
         code.push_str(&format!("{0}{0})", indent));
 

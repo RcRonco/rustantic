@@ -41,7 +41,7 @@ enum MyUnitEnum {
     D,
 }
 
-#[pydantic]
+#[pydantic(aaa, bbb)]
 #[derive(Clone)]
 struct MyClass {
     pub name: String,
@@ -54,11 +54,22 @@ struct MyClass {
 #[pymethods]
 impl MyClass {
     #[new]
-    pub fn new(name: String, num2: u32, nested: Nested, myenum: MyUnitEnum) -> PyResult<Self> {
+    #[pyo3(signature = (name, num2, vec, nested, myenum, _nesteds, _opt1=None, _opt2=None, _opt3=None))]
+    pub fn new(
+        name: String,
+        num2: u32,
+        vec: Vec<f32>,
+        nested: Nested,
+        myenum: MyUnitEnum,
+        _nesteds: Vec<Nested>,
+        _opt1: Option<i32>,
+        _opt2: Option<Nested>,
+        _opt3: Option<Vec<Nested>>,
+    ) -> PyResult<Self> {
         Ok(Self {
             name,
             num: num2,
-            vec: vec![],
+            vec,
             nested,
             myenum,
         })

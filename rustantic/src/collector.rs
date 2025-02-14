@@ -1,11 +1,12 @@
+use crate::marcos::has_rustantic_attr;
 use crate::models::{
     ConstructorMetadata, DiscriminatedUnionMetadata, ItemMetadata, StructMetadata,
     UnionVariantMetadata, UnitEnumMetadata,
 };
 use std::{collections::HashMap, fs, path::PathBuf};
 use syn::{
-    parse_file, visit::Visit, Attribute, FnArg, ImplItem, ImplItemFn, Item, ItemEnum, ItemImpl,
-    ItemStruct, Type,
+    parse_file, visit::Visit, FnArg, ImplItem, ImplItemFn, Item, ItemEnum, ItemImpl, ItemStruct,
+    Type,
 };
 use walkdir::WalkDir;
 
@@ -28,10 +29,6 @@ impl MetadataCollector {
 
     pub fn entities(&self) -> &HashMap<String, ItemMetadata> {
         &self.entities
-    }
-
-    pub fn contains_ident(&self, ident: &str) -> bool {
-        self.entities.contains_key(ident)
     }
 
     fn scan_lib(&mut self) {
@@ -61,10 +58,6 @@ impl MetadataCollector {
                 }
             }
         }
-    }
-
-    fn has_rustantic_attr(&self, attrs: &[Attribute]) -> bool {
-        attrs.iter().any(|attr| attr.path().is_ident("pydantic"))
     }
 
     fn is_pyo_constructor(&self, fn_: &ImplItemFn) -> bool {
@@ -175,12 +168,12 @@ impl<'ast> Visit<'ast> for MetadataCollector {
     fn visit_item(&mut self, node: &'ast Item) {
         match node {
             Item::Struct(ref item_struct) => {
-                if self.has_rustantic_attr(&item_struct.attrs) {
+                if has_rustantic_attr(&item_struct.attrs) {
                     self.collect_pydantic_struct(item_struct);
                 }
             }
             Item::Enum(ref item_enum) => {
-                if self.has_rustantic_attr(&item_enum.attrs) {
+                if has_rustantic_attr(&item_enum.attrs) {
                     self.collect_pydantic_enum(item_enum);
                 }
             }

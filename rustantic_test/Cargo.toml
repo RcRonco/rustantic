@@ -22,5 +22,5 @@ rand = "0.9.0"
 serde = { version = "1.0.217", features = ["derive"] }
 syn = { version = "2.0.98", features = ["visit", "full", "derive", "parsing"] }
 rustantic-macros = { path = "../rustantic-macros" }
-rustantic = { path = "../rustantic" }
+rustantic = { path = "../rustantic", features = ["generator"] }
 inventory = "0.3.19"

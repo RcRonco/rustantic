@@ -110,6 +110,47 @@ impl<'a> FieldGenerator<'a> {
         }
     }
 
+    pub fn generate_to_pyo3(&self, field_name: &str, field_type: &Type) -> String {
+        if let Some(ident_str) = self.get_type_ident(field_type) {
+            if self.entities.contains_key(&ident_str) {
+                return format!("{}.to_rs()", field_name);
+            } else if let Type::Path(type_path) = field_type {
+                if type_path.qself.is_none() {
+                    let segment = type_path.path.segments.last().unwrap();
+                    let ident_str = segment.ident.to_string();
+                    match ident_str.as_str() {
+                        "Option" => {
+                            let inner_ty = self.get_inner_type(&segment.arguments);
+                            let inner_ty_to_rs = if let Some(ity) = inner_ty {
+                                self.generate_to_pyo3(field_name, ity)
+                            } else {
+                                field_name.to_owned()
+                            };
+
+                            return format!(
+                                "({} if {} is not None else None)",
+                                inner_ty_to_rs, field_name
+                            );
+                        }
+                        "Vec" => {
+                            let inner_ty = self.get_inner_type(&segment.arguments);
+                            let inner_ty_to_rs = if let Some(ity) = inner_ty {
+                                self.generate_to_pyo3("v", ity)
+                            } else {
+                                field_name.to_owned()
+                            };
+
+                            return format!("[{} for v in {}]", inner_ty_to_rs, field_name);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        field_name.to_owned()
+    }
+
     fn rust_type_to_pydantic(&self, ty: &Type) -> FieldGenerationResult {
         match ty {
             // Handle common types
@@ -186,21 +227,27 @@ impl<'a> FieldGenerator<'a> {
         }
     }
 
+    fn get_inner_type(&self, inner_type: &'a PathArguments) -> Option<&'a Type> {
+        if let PathArguments::AngleBracketed(angle_args) = inner_type {
+            if let Some(GenericArgument::Type(inner_ty)) = angle_args.args.first() {
+                Some(inner_ty)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     fn resolve_inner_type(
         &self,
         parent_type: &str,
         inner_type: &PathArguments,
     ) -> FieldGenerationResult {
-        if let PathArguments::AngleBracketed(angle_args) = inner_type {
-            if let Some(GenericArgument::Type(inner_ty)) = angle_args.args.first() {
-                let mut result = self.rust_type_to_pydantic(inner_ty);
-                result.ty = format!("{}[{}]", parent_type, result.ty);
-                result
-            } else {
-                let mut any = FieldGenerationResult::create_any(None);
-                any.ty = format!("{}[{}]", parent_type, "Any");
-                any
-            }
+        if let Some(inner_ty) = self.get_inner_type(inner_type) {
+            let mut result = self.rust_type_to_pydantic(inner_ty);
+            result.ty = format!("{}[{}]", parent_type, result.ty);
+            result
         } else {
             let mut any = FieldGenerationResult::create_any(None);
             any.ty = format!("{}[{}]", parent_type, "Any");
