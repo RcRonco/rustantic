@@ -3,19 +3,20 @@ from pydantic import BaseModel, Field
 from pydantic import Field
 from rustantic_test.generated.my_unit_enum import MyUnitEnum
 from rustantic_test.generated.nested import Nested
+from typing import Any
 from typing import Optional
 import rustantic_test
 
 class MyClass(BaseModel):
     name: str
     num2: int = Field(..., ge=0)
-    vec: list[float]
+    vec: list[float] #  
     nested: Nested
     myenum: MyUnitEnum
-    _nesteds: list[Nested]
-    _opt1: Optional[int]
-    _opt2: Optional[Nested]
-    _opt3: Optional[list[Nested]]
+    _nesteds: list[Nested] #  
+    _opt1: Optional[int] #  
+    _opt2: Optional[Nested] #  
+    _opt3: Optional[list[Nested]] #   
 
     def to_rs(self):
         return rustantic_test.MyClass(

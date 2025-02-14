@@ -9,12 +9,10 @@ name = "rustantic_test"
 crate-type = ["cdylib"]
 
 [dependencies]
+pyo3 = { version = "=0.23.3", features = ["abi3-py312", "full"] }
+chrono = "0.4.39"
 rustantic-macros = { path = "../rustantic-macros" }
-
-[dependencies.pyo3]
-version = "0.23.1"
-# "abi3-py38" tells pyo3 (and maturin) to build using the stable ABI with minimum Python version 3.12
-features = ["abi3-py38"]
+uuid = { version = "1.11.0", features = ["v1", "v3", "v4", "v5", "v7"] }
 
 [build-dependencies]
 quote = "1.0.38"
@@ -23,4 +21,3 @@ serde = { version = "1.0.217", features = ["derive"] }
 syn = { version = "2.0.98", features = ["visit", "full", "derive", "parsing"] }
 rustantic-macros = { path = "../rustantic-macros" }
 rustantic = { path = "../rustantic", features = ["generator"] }
-inventory = "0.3.19"

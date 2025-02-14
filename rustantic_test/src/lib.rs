@@ -1,27 +1,28 @@
 #![allow(dead_code)]
 use pyo3::prelude::*;
 use rustantic_macros::pydantic;
+use uuid::Uuid;
 
 #[pydantic]
 #[derive(Clone, PartialEq)]
 pub struct Nested {
     pub name: String,
     pub num: u32,
-}
-
-#[pydantic]
-#[derive(Clone, PartialEq)]
-pub struct Nested2 {
-    pub name: String,
-    pub num: u32,
+    pub id: Uuid,
 }
 
 #[pymethods]
 impl Nested {
     #[new]
-    pub fn new(name: String, num: u32) -> PyResult<Self> {
-        Ok(Self { name, num })
+    pub fn new(name: String, num: u32, id: Uuid) -> PyResult<Self> {
+        Ok(Self { name, num, id: id })
     }
+}
+#[pydantic]
+#[derive(Clone, PartialEq)]
+pub struct Nested2 {
+    pub name: String,
+    pub num: u32,
 }
 
 #[pydantic]
