@@ -136,9 +136,9 @@ impl<'a> FieldGenerator<'a> {
             }
             Type::Never(_) => {
                 let mut result = FieldGenerationResult::default();
-                result.add_any_import();
-                result.comment.push_str("Never type");
-                result.ty = "Any".to_owned();
+                result.additional_imports.insert("from types import NoneType".to_string());
+                result.comment.push_str("NoneType");
+                result.ty = "NoneType".to_owned();
                 result.default_value = Some("None".to_owned());
                 result
             }

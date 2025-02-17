@@ -33,6 +33,17 @@ enum MyEnum {
     D(),
 }
 
+#[pyfunction]
+fn check_my_enum(f: MyEnum) -> String {
+    match f {
+        MyEnum::A(_) => "A".to_string(),
+        MyEnum::B(_) => "B".to_string(),
+        MyEnum::C(_) => "C".to_string(),
+        MyEnum::D() => "D".to_string(),
+    }
+}
+
+
 #[pydantic]
 #[derive(Clone)]
 enum MyUnitEnum {
@@ -40,6 +51,16 @@ enum MyUnitEnum {
     B = 300,
     C = 900,
     D,
+}
+
+#[pyfunction]
+fn check_my_unit_enum(f: MyUnitEnum) -> String {
+    match f {
+        MyUnitEnum::A => "A".to_string(),
+        MyUnitEnum::B => "B".to_string(),
+        MyUnitEnum::C => "C".to_string(),
+        MyUnitEnum::D => "D".to_string(),
+    }
 }
 
 #[pydantic]
@@ -66,12 +87,16 @@ impl MyClass {
     }
 }
 
+
 #[pymodule]
 fn rustantic_test(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Nested>()?;
     m.add_class::<MyClass>()?;
     m.add_class::<MyUnitEnum>()?;
     m.add_class::<MyEnum>()?;
+
+    m.add_function(wrap_pyfunction!(check_my_enum, m)?)?;
+    m.add_function(wrap_pyfunction!(check_my_unit_enum, m)?)?;
 
     Ok(())
 }

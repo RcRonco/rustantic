@@ -168,8 +168,14 @@ impl UnionCodeGenerator {
     ) -> String {
         let mut code_sections = vec![
             "    def to_rs(self):".to_owned(),
-            "        inner_to_rs = getattr(self.root.value, \"to_rs\", lambda v: v)".to_string(),
-            "        val: Any = inner_to_rs(self.root.value)".to_string(),
+            "        inner_to_rs = getattr(self.root.value, \"to_rs\", None)".to_string(),
+            "        if inner_to_rs:".to_string(),
+            "           # If `to_rs` exists, run it to get pyo3 object".to_string(),
+            "           val: Any = inner_to_rs()".to_string(),
+            "        else:".to_string(),
+            "           # Otherwise, assume the value is native python and should work when passed to pyo3".to_string(),
+            "           val = self.root.value".to_string(),
+            "".to_string(),
             "        match self.root.kind:".to_string(),
         ];
         for variant in meta.variants.iter() {
