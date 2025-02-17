@@ -1,10 +1,10 @@
 import rustantic_test
 from rustantic_test.generated.my_enum import MyEnum, MyEnumA, MyEnumB, MyEnumC, MyEnumD
-from rustantic_test.generated.nested import Nested
+from rustantic_test.generated.nested_2 import Nested2
 
 def test_my_enum():
-    a = MyEnum(root=MyEnumA(value=Nested(name="name", num=1)))
-    b = MyEnum(root=MyEnumB(value=Nested(name="name", num=1)))
+    a = MyEnum(root=MyEnumA(value=Nested2(name="name", num=1)))
+    b = MyEnum(root=MyEnumB(value=Nested2(name="name", num=1)))
     c = MyEnum(root=MyEnumC(value=1))
     d = MyEnum(root=MyEnumD())
 

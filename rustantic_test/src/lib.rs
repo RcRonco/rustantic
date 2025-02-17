@@ -11,13 +11,14 @@ pub struct Nested {
     pub id: Uuid,
 }
 
-#[pymethods]
-impl Nested {
-    #[new]
-    pub fn new(name: String, num: u32, id: Uuid) -> PyResult<Self> {
-        Ok(Self { name, num, id: id })
-    }
-}
+// #[pymethods]
+// impl Nested {
+//     #[new]
+//     pub fn new(name: String, num: u32, id: Uuid) -> PyResult<Self> {
+//         Ok(Self { name, num, id: id })
+//     }
+// }
+
 #[pydantic]
 #[derive(Clone, PartialEq)]
 pub struct Nested2 {
@@ -25,11 +26,19 @@ pub struct Nested2 {
     pub num: u32,
 }
 
+#[pymethods]
+impl Nested2 {
+    #[new]
+    pub fn new(name: String, num: u32) -> PyResult<Self> {
+        Ok(Self { name, num })
+    }
+}
+
 #[pydantic]
 #[derive(Clone)]
 enum MyEnum {
-    A(Nested),
-    B(Nested),
+    A(Nested2),
+    B(Nested2),
     C(i16),
     D(),
 }
@@ -106,6 +115,7 @@ fn rustantic_test(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MyClass>()?;
     m.add_class::<MyUnitEnum>()?;
     m.add_class::<MyEnum>()?;
+    m.add_class::<Nested2>()?;
 
     m.add_function(wrap_pyfunction!(check_my_enum, m)?)?;
     m.add_function(wrap_pyfunction!(check_my_unit_enum, m)?)?;
