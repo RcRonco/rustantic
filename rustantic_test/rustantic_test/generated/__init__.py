@@ -1,13 +1,13 @@
-from .my_unit_enum import MyUnitEnum
-from .my_enum import MyEnum
-from .nested_2 import Nested2
-from .nested import Nested
 from .my_class import MyClass
+from .my_enum import MyEnum
+from .my_unit_enum import MyUnitEnum
+from .nested import Nested
+from .nested_2 import Nested2
 
 __all__ = [
-    "MyUnitEnum",
-    "MyEnum",
-    "Nested2",
-    "Nested",
     "MyClass",
+    "MyEnum",
+    "MyUnitEnum",
+    "Nested",
+    "Nested2",
 ]

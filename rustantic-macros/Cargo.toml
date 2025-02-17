@@ -25,6 +25,7 @@ exclude = [
 [dependencies]
 syn = { version = "2.0.98", features = ["full"] }
 quote = { version = "1.0.38" }
+rustantic = { path = "../rustantic" }
 
 
 [lib]

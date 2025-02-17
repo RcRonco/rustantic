@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use convert_case::{Case, Casing};
+use itertools::Itertools;
 use syn::{GenericArgument, PathArguments, Type, TypePath};
 
 use crate::models::ItemMetadata;
@@ -56,6 +57,14 @@ impl FieldGenerationResult {
     fn require_field_definition(&self) -> bool {
         self.default_value.is_some() || !self.field_properties.is_empty()
     }
+
+    fn merge(&mut self, other: FieldGenerationResult) -> String {
+        self.additional_imports.extend(other.additional_imports);
+        self.comment.push(' ');
+        self.comment.push_str(&other.comment);
+        self.field_properties.extend(other.field_properties);
+        other.ty
+    }
 }
 
 pub(crate) struct FieldGenerator<'a> {
@@ -108,6 +117,71 @@ impl<'a> FieldGenerator<'a> {
             code: code,
             additional_imports: generated_field.additional_imports,
         }
+    }
+
+    pub fn generate_to_pyo3(&self, field_name: &str, field_type: &Type) -> String {
+        if let Some(ident_str) = self.get_type_ident(field_type) {
+            if self.entities.contains_key(&ident_str) {
+                return format!("{}.to_rs()", field_name);
+            } else if let Type::Path(type_path) = field_type {
+                if type_path.qself.is_none() {
+                    let segment = type_path.path.segments.last().unwrap();
+                    let ident_str = segment.ident.to_string();
+                    match ident_str.as_str() {
+                        "Option" => {
+                            let inner_ty = self.get_first_inner_type(&segment.arguments);
+                            let inner_ty_to_rs = if let Some(ity) = inner_ty {
+                                self.generate_to_pyo3(field_name, ity)
+                            } else {
+                                field_name.to_owned()
+                            };
+
+                            return format!(
+                                "({} if {} is not None else None)",
+                                inner_ty_to_rs, field_name
+                            );
+                        }
+                        "Vec" => {
+                            let inner_ty = self.get_first_inner_type(&segment.arguments);
+                            let inner_ty_to_rs = if let Some(ity) = inner_ty {
+                                self.generate_to_pyo3("v", ity)
+                            } else {
+                                field_name.to_owned()
+                            };
+
+                            return format!("[{} for v in {}]", inner_ty_to_rs, field_name);
+                        }
+                        "HashSet" | "BTreeSet" => {
+                            let inner_ty = self.get_first_inner_type(&segment.arguments);
+                            let inner_ty_to_rs = if let Some(ity) = inner_ty {
+                                self.generate_to_pyo3("v", ity)
+                            } else {
+                                field_name.to_owned()
+                            };
+
+                            return format!("{{ {} for v in {} }}", inner_ty_to_rs, field_name);
+                        }
+                        "HashMap" | "BTreeMap" | "IndexMap" => {
+                            if let Some((key_ty, val_ty)) =
+                                self.get_map_inner_types(&segment.arguments)
+                            {
+                                let key_to_rs = self.generate_to_pyo3("k", key_ty);
+                                let val_to_rs = self.generate_to_pyo3("v", val_ty);
+                                return format!(
+                                    "{{ {}: {} for v in {}.items() }}",
+                                    key_to_rs, val_to_rs, field_name
+                                );
+                            } else {
+                                return field_name.to_owned();
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        field_name.to_owned()
     }
 
     fn rust_type_to_pydantic(&self, ty: &Type) -> FieldGenerationResult {
@@ -183,6 +257,48 @@ impl<'a> FieldGenerator<'a> {
                 "Vec" => {
                     return self.resolve_inner_type("list", &segment.arguments);
                 }
+                "Uuid" => {
+                    result
+                        .additional_imports
+                        .insert("from uuid import UUID".to_owned());
+                    "UUID".to_string()
+                }
+                "HashMap" | "BTreeMap" | "IndexMap" => {
+                    return self.resolve_inner_type("dict", &segment.arguments);
+                }
+                "HashSet" | "BTreeSet" => {
+                    return self.resolve_inner_type("set", &segment.arguments);
+                }
+                "Duration" => {
+                    result
+                        .additional_imports
+                        .insert("import datetime".to_owned());
+                    "datetime.timedelta".to_string()
+                }
+                "SystemTime" | "DateTime" | "NaiveDateTime" => {
+                    result
+                        .additional_imports
+                        .insert("import datetime".to_owned());
+                    "datetime.datetime".to_string()
+                }
+                "NativeDate" => {
+                    result
+                        .additional_imports
+                        .insert("import datetime".to_owned());
+                    "datetime.date".to_string()
+                }
+                "NativeTime" => {
+                    result
+                        .additional_imports
+                        .insert("import datetime".to_owned());
+                    "datetime.time".to_string()
+                }
+                "PathBuf" | "Path" => {
+                    result
+                        .additional_imports
+                        .insert("import pathlib".to_owned());
+                    "pathlib.Path".to_string()
+                }
                 // Custom or unknown type
                 _ => {
                     // Custom pydantic ref
@@ -194,21 +310,62 @@ impl<'a> FieldGenerator<'a> {
         }
     }
 
+    fn get_inner_types(&self, inner_type: &'a PathArguments) -> Option<Vec<&'a Type>> {
+        if let PathArguments::AngleBracketed(angle_args) = inner_type {
+            Some(
+                angle_args
+                    .args
+                    .iter()
+                    .filter_map(|arg| {
+                        if let GenericArgument::Type(inner_ty) = arg {
+                            Some(inner_ty)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    }
+
+    fn get_first_inner_type(&self, inner_type: &'a PathArguments) -> Option<&'a Type> {
+        if let Some(mut inner_types) = self.get_inner_types(inner_type) {
+            Some(inner_types.remove(0))
+        } else {
+            None
+        }
+    }
+
+    fn get_map_inner_types(&self, inner_type: &'a PathArguments) -> Option<(&'a Type, &'a Type)> {
+        if let Some(mut inner_types) = self.get_inner_types(inner_type) {
+            if inner_types.len() == 2 {
+                Some((inner_types.remove(0), inner_types.remove(0)))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
     fn resolve_inner_type(
         &self,
         parent_type: &str,
-        inner_type: &PathArguments,
+        path_args: &PathArguments,
     ) -> FieldGenerationResult {
-        if let PathArguments::AngleBracketed(angle_args) = inner_type {
-            if let Some(GenericArgument::Type(inner_ty)) = angle_args.args.first() {
-                let mut result = self.rust_type_to_pydantic(inner_ty);
-                result.ty = format!("{}[{}]", parent_type, result.ty);
-                result
-            } else {
-                let mut any = FieldGenerationResult::create_any(None);
-                any.ty = format!("{}[{}]", parent_type, "Any");
-                any
-            }
+        if let Some(inner_types) = self.get_inner_types(path_args) {
+            let mut result = FieldGenerationResult::create_any(None);
+            let generic_args = inner_types
+                .into_iter()
+                .map(|t| {
+                    let ty_res = self.rust_type_to_pydantic(t);
+                    result.merge(ty_res)
+                })
+                .join(", ");
+            result.ty = format!("{}[{}]", parent_type, generic_args);
+            result
         } else {
             let mut any = FieldGenerationResult::create_any(None);
             any.ty = format!("{}[{}]", parent_type, "Any");
