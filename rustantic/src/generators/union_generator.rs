@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use itertools::{sorted, Itertools};
+use syn::{Type, TypeNever};
 
 use crate::{
     collector::MetadataCollector,
@@ -114,7 +115,7 @@ impl UnionCodeGenerator {
         let mut result = GenerationResult::default();
         let field_gen = field_generator.generate(
             "value",
-            variant.ty.as_ref().expect("Named enum not supported"),
+            variant.ty.as_ref().unwrap_or(&Type::Never(TypeNever {bang_token: Default::default()})),
         );
         let code = vec![
             format!("class {0}{1}(BaseModel):", &meta.ident, &variant.ident),
@@ -167,8 +168,14 @@ impl UnionCodeGenerator {
     ) -> String {
         let mut code_sections = vec![
             "    def to_rs(self):".to_owned(),
-            "        inner_to_rs = getattr(self.root.value, \"to_rs\", lambda v: v)".to_string(),
-            "        val: Any = inner_to_rs(self.root.value)".to_string(),
+            "        inner_to_rs = getattr(self.root.value, \"to_rs\", None)".to_string(),
+            "        if inner_to_rs:".to_string(),
+            "           # If `to_rs` exists, run it to get pyo3 object".to_string(),
+            "           val: Any = inner_to_rs()".to_string(),
+            "        else:".to_string(),
+            "           # Otherwise, assume the value is native python and should work when passed to pyo3".to_string(),
+            "           val = self.root.value".to_string(),
+            "".to_string(),
             "        match self.root.kind:".to_string(),
         ];
         for variant in meta.variants.iter() {
@@ -177,10 +184,21 @@ impl UnionCodeGenerator {
                 self.generate_discriminator_name(&meta.ident),
                 &variant.ident
             ));
+            match variant.ty {
+                Some(_) => {
             code_sections.push(format!(
                 "                return {}.{}.{}(val)\n",
                 config.package_name, &meta.ident, &variant.ident,
             ));
+                }
+                None => {
+                    code_sections.push(format!(
+                        "                return {}.{}.{}()\n",
+                        config.package_name, &meta.ident, &variant.ident,
+                    ));
+                }
+            }
+
         }
 
         code_sections.join("\n")

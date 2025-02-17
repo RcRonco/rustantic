@@ -6,3 +6,9 @@ import rustantic_test
 class Nested2(BaseModel):
     name: str
     num: int = Field(..., ge=0)
+
+    def to_rs(self):
+        return rustantic_test.Nested2(
+            name=self.name,
+            num=self.num,
+        )

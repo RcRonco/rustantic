@@ -11,13 +11,14 @@ pub struct Nested {
     pub id: Uuid,
 }
 
-#[pymethods]
-impl Nested {
-    #[new]
-    pub fn new(name: String, num: u32, id: Uuid) -> PyResult<Self> {
-        Ok(Self { name, num, id: id })
-    }
-}
+// #[pymethods]
+// impl Nested {
+//     #[new]
+//     pub fn new(name: String, num: u32, id: Uuid) -> PyResult<Self> {
+//         Ok(Self { name, num, id: id })
+//     }
+// }
+
 #[pydantic]
 #[derive(Clone, PartialEq)]
 pub struct Nested2 {
@@ -25,13 +26,33 @@ pub struct Nested2 {
     pub num: u32,
 }
 
+#[pymethods]
+impl Nested2 {
+    #[new]
+    pub fn new(name: String, num: u32) -> PyResult<Self> {
+        Ok(Self { name, num })
+    }
+}
+
 #[pydantic]
 #[derive(Clone)]
 enum MyEnum {
-    A(Nested),
-    B(Nested),
+    A(Nested2),
+    B(Nested2),
     C(i16),
+    D(),
 }
+
+#[pyfunction]
+fn check_my_enum(f: MyEnum) -> String {
+    match f {
+        MyEnum::A(_) => "A".to_string(),
+        MyEnum::B(_) => "B".to_string(),
+        MyEnum::C(_) => "C".to_string(),
+        MyEnum::D() => "D".to_string(),
+    }
+}
+
 
 #[pydantic]
 #[derive(Clone)]
@@ -40,6 +61,16 @@ enum MyUnitEnum {
     B = 300,
     C = 900,
     D,
+}
+
+#[pyfunction]
+fn check_my_unit_enum(f: MyUnitEnum) -> String {
+    match f {
+        MyUnitEnum::A => "A".to_string(),
+        MyUnitEnum::B => "B".to_string(),
+        MyUnitEnum::C => "C".to_string(),
+        MyUnitEnum::D => "D".to_string(),
+    }
 }
 
 #[pydantic(aaa, bbb)]
@@ -77,12 +108,17 @@ impl MyClass {
     }
 }
 
+
 #[pymodule]
 fn rustantic_test(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Nested>()?;
     m.add_class::<MyClass>()?;
     m.add_class::<MyUnitEnum>()?;
     m.add_class::<MyEnum>()?;
+    m.add_class::<Nested2>()?;
+
+    m.add_function(wrap_pyfunction!(check_my_enum, m)?)?;
+    m.add_function(wrap_pyfunction!(check_my_unit_enum, m)?)?;
 
     Ok(())
 }

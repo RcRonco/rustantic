@@ -208,6 +208,14 @@ impl<'a> FieldGenerator<'a> {
                 };
                 result
             }
+            Type::Never(_) => {
+                let mut result = FieldGenerationResult::default();
+                result.additional_imports.insert("from types import NoneType".to_string());
+                result.comment.push_str("NoneType");
+                result.ty = "NoneType".to_owned();
+                result.default_value = Some("None".to_owned());
+                result
+            }
             // Catch-all for function pointers, never types, tuples, etc.
             _ => {
                 let mut result = FieldGenerationResult::default();

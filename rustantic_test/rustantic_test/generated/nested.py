@@ -8,10 +8,3 @@ class Nested(BaseModel):
     name: str
     num: int = Field(..., ge=0)
     id: UUID
-
-    def to_rs(self):
-        return rustantic_test.Nested(
-            name=self.name,
-            num=self.num,
-            id=self.id,
-        )
